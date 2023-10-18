@@ -65,7 +65,7 @@ class TuneAviary(BaseSingleAgentAviary):
         #### Initialize the target trajectory ######################
         self.TRAJ_STEPS = int((self.SIM_FREQ * self.EPISODE_LEN_SEC) / self.AGGR_PHY_STEPS)
         self.CTRL_TIMESTEP = self.AGGR_PHY_STEPS*self.TIMESTEP
-        self.TARGET_POSITION = np.array([[0, 4.0*np.cos(0.006*i), 1.0] for i in range(self.TRAJ_STEPS)])
+        self.TARGET_POSITION = np.array([[4.0*np.sin(2*np.pi/self.TRAJ_STEPS*i), 4.0*np.cos(2*np.pi/self.TRAJ_STEPS*i), 1.0] for i in range(self.TRAJ_STEPS)]) # change to circle
         #### Derive the trajectory to obtain target velocity #######
         self.TARGET_VELOCITY = np.zeros([self.TRAJ_STEPS, 3])
         self.TARGET_VELOCITY[1:, :] = (self.TARGET_POSITION[1:, :] - self.TARGET_POSITION[0:-1, :]) / self.CTRL_TIMESTEP

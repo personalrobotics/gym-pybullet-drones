@@ -4,18 +4,18 @@ from gym_pybullet_drones.utils.enums import DroneModel, Physics
 from gym_pybullet_drones.envs.single_agent_rl.BaseSingleAgentAviary import ActionType, ObservationType, BaseSingleAgentAviary
 from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
 
-class HoverAviary(BaseSingleAgentAviary):
-    """Single agent RL problem: hover at position."""
-
-    ################################################################################
+class CircleAviary(BaseSingleAgentAviary):
+    """Single agent RL problem: drawcircle."""
     
+    ################################################################################
+
     def __init__(self,
                  drone_model: DroneModel=DroneModel.CF2X,
                  initial_xyzs=None,
                  initial_rpys=None,
                  physics: Physics=Physics.PYB,
                  freq: int=240,
-                 aggregate_phy_steps: int=1,
+                 aggregate_phy_steps: int=5,
                  gui=False,
                  record=False, 
                  obs: ObservationType=ObservationType.KIN,
@@ -61,29 +61,24 @@ class HoverAviary(BaseSingleAgentAviary):
                          act=act
                          )
         self.ctrl = DSLPIDControl(drone_model=DroneModel.CF2X)
-        self.goal = np.array([0,0,1.0])
-
+        self.radius = 0.3
 
     def cal_traj(self,):
-        # generate traj to track
-        self.goal = np.array([0,0,1.0]) + np.random.normal(0, 0.002, 3)
-        print(self.goal)
+
+        self.radius = 0.3 + np.random.normal(0., 0.002)
+        self.radius = np.abs(self.radius)
+        print(self.radius)
         self.TRAJ_STEPS = int((self.SIM_FREQ * self.EPISODE_LEN_SEC) / self.AGGR_PHY_STEPS)
-        self.TARGET_POSITION = np.zeros([self.TRAJ_STEPS, 3])
         self.CTRL_TIMESTEP = self.AGGR_PHY_STEPS*self.TIMESTEP
-        for i in range(self.TRAJ_STEPS):
-            if i < self.TRAJ_STEPS * 0.85:
-                self.TARGET_POSITION[i] = self.goal
-                self.TARGET_POSITION[i] = self.INIT_XYZS[0] + (self.goal - self.INIT_XYZS[0])/(0.85*self.TRAJ_STEPS)*i
-            else:
-                self.TARGET_POSITION[i] = self.goal
+        self.TARGET_POSITION = self.INIT_XYZS + np.array([self.radius,0,0]) + np.array([[-self.radius*np.cos(2.05*np.pi/self.TRAJ_STEPS*i), self.radius*np.sin(2.05*np.pi/self.TRAJ_STEPS*i), 0.1] for i in range(self.TRAJ_STEPS)]) # change to circle
+
 
         #### Derive the trajectory to obtain target velocity #######
         self.TARGET_VELOCITY = np.zeros([self.TRAJ_STEPS, 3])
         self.TARGET_VELOCITY[1:, :] = (self.TARGET_POSITION[1:, :] - self.TARGET_POSITION[0:-1, :]) / self.CTRL_TIMESTEP
 
-    ################################################################################
-    
+
+    ###############################################################################
     def _computeReward(self):
         """Computes the current reward value.
 
@@ -94,7 +89,8 @@ class HoverAviary(BaseSingleAgentAviary):
 
         """
         state = self._getDroneStateVector(0)
-        return -1 * np.linalg.norm(self.goal-state[0:3])**2
+        i = min(int(self.step_counter / self.AGGR_PHY_STEPS), self.TRAJ_STEPS - 1)
+        return -1 * np.linalg.norm(self.TARGET_POSITION[i, :]-state[0:3])**2
 
     ################################################################################
     
@@ -108,6 +104,8 @@ class HoverAviary(BaseSingleAgentAviary):
 
         """
         if self.step_counter/self.SIM_FREQ > self.EPISODE_LEN_SEC:
+        # Alternative done condition, see PR #32
+        # if (self.step_counter/self.SIM_FREQ > (self.EPISODE_LEN_SEC)) or ((self._getDroneStateVector(0))[2] < 0.05):
             return True
         else:
             return False
@@ -205,12 +203,12 @@ class HoverAviary(BaseSingleAgentAviary):
         
         """
         if not(clipped_pos_xy == np.array(state[0:2])).all():
-            print("[WARNING] it", self.step_counter, "in HoverAviary._clipAndNormalizeState(), clipped xy position [{:.2f} {:.2f}]".format(state[0], state[1]))
+            print("[WARNING] it", self.step_counter, "in CircleAviary._clipAndNormalizeState(), clipped xy position [{:.2f} {:.2f}]".format(state[0], state[1]))
         if not(clipped_pos_z == np.array(state[2])).all():
-            print("[WARNING] it", self.step_counter, "in HoverAviary._clipAndNormalizeState(), clipped z position [{:.2f}]".format(state[2]))
+            print("[WARNING] it", self.step_counter, "in CircleAviary._clipAndNormalizeState(), clipped z position [{:.2f}]".format(state[2]))
         if not(clipped_rp == np.array(state[7:9])).all():
-            print("[WARNING] it", self.step_counter, "in HoverAviary._clipAndNormalizeState(), clipped roll/pitch [{:.2f} {:.2f}]".format(state[7], state[8]))
+            print("[WARNING] it", self.step_counter, "in CircleAviary._clipAndNormalizeState(), clipped roll/pitch [{:.2f} {:.2f}]".format(state[7], state[8]))
         if not(clipped_vel_xy == np.array(state[10:12])).all():
-            print("[WARNING] it", self.step_counter, "in HoverAviary._clipAndNormalizeState(), clipped xy velocity [{:.2f} {:.2f}]".format(state[10], state[11]))
+            print("[WARNING] it", self.step_counter, "in CircleAviary._clipAndNormalizeState(), clipped xy velocity [{:.2f} {:.2f}]".format(state[10], state[11]))
         if not(clipped_vel_z == np.array(state[12])).all():
-            print("[WARNING] it", self.step_counter, "in HoverAviary._clipAndNormalizeState(), clipped z velocity [{:.2f}]".format(state[12]))
+            print("[WARNING] it", self.step_counter, "in CircleAviary._clipAndNormalizeState(), clipped z velocity [{:.2f}]".format(state[12]))

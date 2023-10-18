@@ -53,7 +53,7 @@ from gym_pybullet_drones.envs.single_agent_rl.BaseSingleAgentAviary import Actio
 
 import shared_constants
 
-EPISODE_REWARD_THRESHOLD = -0 # Upperbound: rewards are always negative, but non-zero
+EPISODE_REWARD_THRESHOLD = 1e6 # Upperbound: rewards are always negative, but non-zero
 """float: Reward threshold to halt the script."""
 
 DEFAULT_ENV = 'hover'
@@ -127,6 +127,12 @@ def run(
                                  )
     if env_name == "tune-aviary-v0":
         train_env = make_vec_env(TuneAviary,
+                                 env_kwargs=sa_env_kwargs,
+                                 n_envs=cpu,
+                                 seed=0
+                                 )
+    if env_name == "circle-aviary-v0":
+        train_env = make_vec_env(CircleAviary,
                                  env_kwargs=sa_env_kwargs,
                                  n_envs=cpu,
                                  seed=0
