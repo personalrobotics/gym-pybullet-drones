@@ -2,23 +2,24 @@ import numpy as np
 
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 from gym_pybullet_drones.envs.single_agent_rl.BaseSingleAgentAviary import ActionType, ObservationType, BaseSingleAgentAviary
+from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
 
-class TuneAviary(BaseSingleAgentAviary):
-    """Single agent RL problem: optimize PID coefficients."""
-
-    ################################################################################
+class CircleAviary(BaseSingleAgentAviary):
+    """Single agent RL problem: drawcircle."""
     
+    ################################################################################
+
     def __init__(self,
                  drone_model: DroneModel=DroneModel.CF2X,
                  initial_xyzs=None,
                  initial_rpys=None,
                  physics: Physics=Physics.PYB,
                  freq: int=240,
-                 aggregate_phy_steps: int=1,
+                 aggregate_phy_steps: int=5,
                  gui=False,
                  record=False, 
                  obs: ObservationType=ObservationType.KIN,
-                 act: ActionType=ActionType.TUN
+                 act: ActionType=ActionType.RPM
                  ):
         """Initialization of a single agent RL environment.
 
@@ -59,45 +60,25 @@ class TuneAviary(BaseSingleAgentAviary):
                          obs=obs,
                          act=act
                          )
-        if self.ACT_TYPE != ActionType.TUN:
-            print("[ERROR] in TuneAviary.__init__(), ACT_TYPE must be ActionType.TUN" )
-            exit()
-        #### Initialize the target trajectory ######################
+        self.ctrl = DSLPIDControl(drone_model=DroneModel.CF2X)
+        self.radius = 0.3
+
+    def cal_traj(self,):
+
+        self.radius = 0.3 + np.random.normal(0., 0.002)
+        self.radius = np.abs(self.radius)
+        print(self.radius)
         self.TRAJ_STEPS = int((self.SIM_FREQ * self.EPISODE_LEN_SEC) / self.AGGR_PHY_STEPS)
         self.CTRL_TIMESTEP = self.AGGR_PHY_STEPS*self.TIMESTEP
-        self.TARGET_POSITION = np.array([[4.0*np.sin(2*np.pi/self.TRAJ_STEPS*i), 4.0*np.cos(2*np.pi/self.TRAJ_STEPS*i), 1.0] for i in range(self.TRAJ_STEPS)]) # change to circle
+        self.TARGET_POSITION = self.INIT_XYZS + np.array([self.radius,0,0]) + np.array([[-self.radius*np.cos(2.05*np.pi/self.TRAJ_STEPS*i), self.radius*np.sin(2.05*np.pi/self.TRAJ_STEPS*i), 0.1] for i in range(self.TRAJ_STEPS)]) # change to circle
+
+
         #### Derive the trajectory to obtain target velocity #######
         self.TARGET_VELOCITY = np.zeros([self.TRAJ_STEPS, 3])
         self.TARGET_VELOCITY[1:, :] = (self.TARGET_POSITION[1:, :] - self.TARGET_POSITION[0:-1, :]) / self.CTRL_TIMESTEP
 
-    ################################################################################
-    
-    def _trajectoryTrackingRPMs(self):
-        """Computes the RPMs values to target a hardcoded trajectory.
 
-        Returns
-        -------
-        ndarray
-            (4,)-shaped array of ints containing to clipped RPMs
-            commanded to the 4 motors of each drone.
-
-        """
-        
-        ####
-        state = self._getDroneStateVector(0)
-        i = min(int(self.step_counter / self.AGGR_PHY_STEPS), self.TRAJ_STEPS - 1)
-        rpm, _, _ = self.ctrl.computeControl(control_timestep=self.CTRL_TIMESTEP, 
-                                             cur_pos=state[0:3],
-                                             cur_quat=state[3:7],
-                                             cur_vel=state[10:13],
-                                             cur_ang_vel=state[13:16],
-                                             target_pos=self.TARGET_POSITION[i, :],
-                                             target_vel=self.TARGET_VELOCITY[i, :]
-                                             )
-        return rpm
-
-    ################################################################################
-    
+    ###############################################################################
     def _computeReward(self):
         """Computes the current reward value.
 
@@ -123,6 +104,8 @@ class TuneAviary(BaseSingleAgentAviary):
 
         """
         if self.step_counter/self.SIM_FREQ > self.EPISODE_LEN_SEC:
+        # Alternative done condition, see PR #32
+        # if (self.step_counter/self.SIM_FREQ > (self.EPISODE_LEN_SEC)) or ((self._getDroneStateVector(0))[2] < 0.05):
             return True
         else:
             return False
@@ -220,12 +203,12 @@ class TuneAviary(BaseSingleAgentAviary):
         
         """
         if not(clipped_pos_xy == np.array(state[0:2])).all():
-            print("[WARNING] it", self.step_counter, "in TuneAviary._clipAndNormalizeState(), clipped xy position [{:.2f} {:.2f}]".format(state[0], state[1]))
+            print("[WARNING] it", self.step_counter, "in CircleAviary._clipAndNormalizeState(), clipped xy position [{:.2f} {:.2f}]".format(state[0], state[1]))
         if not(clipped_pos_z == np.array(state[2])).all():
-            print("[WARNING] it", self.step_counter, "in TuneAviary._clipAndNormalizeState(), clipped z position [{:.2f}]".format(state[2]))
+            print("[WARNING] it", self.step_counter, "in CircleAviary._clipAndNormalizeState(), clipped z position [{:.2f}]".format(state[2]))
         if not(clipped_rp == np.array(state[7:9])).all():
-            print("[WARNING] it", self.step_counter, "in TuneAviary._clipAndNormalizeState(), clipped roll/pitch [{:.2f} {:.2f}]".format(state[7], state[8]))
+            print("[WARNING] it", self.step_counter, "in CircleAviary._clipAndNormalizeState(), clipped roll/pitch [{:.2f} {:.2f}]".format(state[7], state[8]))
         if not(clipped_vel_xy == np.array(state[10:12])).all():
-            print("[WARNING] it", self.step_counter, "in TuneAviary._clipAndNormalizeState(), clipped xy velocity [{:.2f} {:.2f}]".format(state[10], state[11]))
+            print("[WARNING] it", self.step_counter, "in CircleAviary._clipAndNormalizeState(), clipped xy velocity [{:.2f} {:.2f}]".format(state[10], state[11]))
         if not(clipped_vel_z == np.array(state[12])).all():
-            print("[WARNING] it", self.step_counter, "in TuneAviary._clipAndNormalizeState(), clipped z velocity [{:.2f}]".format(state[12]))
+            print("[WARNING] it", self.step_counter, "in CircleAviary._clipAndNormalizeState(), clipped z velocity [{:.2f}]".format(state[12]))

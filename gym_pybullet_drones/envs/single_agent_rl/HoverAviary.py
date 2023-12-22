@@ -2,6 +2,7 @@ import numpy as np
 
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 from gym_pybullet_drones.envs.single_agent_rl.BaseSingleAgentAviary import ActionType, ObservationType, BaseSingleAgentAviary
+from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
 
 class HoverAviary(BaseSingleAgentAviary):
     """Single agent RL problem: hover at position."""
@@ -59,6 +60,27 @@ class HoverAviary(BaseSingleAgentAviary):
                          obs=obs,
                          act=act
                          )
+        self.ctrl = DSLPIDControl(drone_model=DroneModel.CF2X)
+        self.goal = np.array([0,0,1.0])
+
+
+    def cal_traj(self,):
+        # generate traj to track
+        self.goal = np.array([0,0,0.7]) + np.random.normal(0, 0.002, 3)
+        print(self.goal)
+        self.TRAJ_STEPS = int((self.SIM_FREQ * self.EPISODE_LEN_SEC) / self.AGGR_PHY_STEPS)
+        self.TARGET_POSITION = np.zeros([self.TRAJ_STEPS, 3])
+        self.CTRL_TIMESTEP = self.AGGR_PHY_STEPS*self.TIMESTEP
+        for i in range(self.TRAJ_STEPS):
+            if i < self.TRAJ_STEPS * 0.85:
+                self.TARGET_POSITION[i] = self.goal
+                self.TARGET_POSITION[i] = self.INIT_XYZS[0] + (self.goal - self.INIT_XYZS[0])/(0.85*self.TRAJ_STEPS)*i
+            else:
+                self.TARGET_POSITION[i] = self.goal
+
+        #### Derive the trajectory to obtain target velocity #######
+        self.TARGET_VELOCITY = np.zeros([self.TRAJ_STEPS, 3])
+        self.TARGET_VELOCITY[1:, :] = (self.TARGET_POSITION[1:, :] - self.TARGET_POSITION[0:-1, :]) / self.CTRL_TIMESTEP
 
     ################################################################################
     
@@ -72,7 +94,7 @@ class HoverAviary(BaseSingleAgentAviary):
 
         """
         state = self._getDroneStateVector(0)
-        return -1 * np.linalg.norm(np.array([0, 0, 1])-state[0:3])**2
+        return -1 * np.linalg.norm(self.goal-state[0:3])**2
 
     ################################################################################
     

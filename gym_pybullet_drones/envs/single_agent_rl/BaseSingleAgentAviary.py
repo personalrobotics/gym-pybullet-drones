@@ -82,7 +82,7 @@ class BaseSingleAgentAviary(BaseAviary):
         dynamics_attributes = True if act in [ActionType.DYN, ActionType.ONE_D_DYN] else False
         self.OBS_TYPE = obs
         self.ACT_TYPE = act
-        self.EPISODE_LEN_SEC = 5
+        self.EPISODE_LEN_SEC = 20
         #### Create integrated controllers #########################
         if act in [ActionType.PID, ActionType.VEL, ActionType.TUN, ActionType.ONE_D_PID]:
             os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -223,7 +223,8 @@ class BaseSingleAgentAviary(BaseAviary):
                                          )
             return self._trajectoryTrackingRPMs() 
         elif self.ACT_TYPE == ActionType.RPM:
-            return np.array(self.HOVER_RPM * (1+0.05*action))
+            return np.array(action)
+            #return np.array(self.HOVER_RPM * (1+0.05*action))
         elif self.ACT_TYPE == ActionType.DYN:
             return nnlsRPM(thrust=(self.GRAVITY*(action[0]+1)),
                            x_torque=(0.05*self.MAX_XY_TORQUE*action[1]),

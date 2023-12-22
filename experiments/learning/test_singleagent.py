@@ -56,6 +56,7 @@ def run(exp, gui=DEFAULT_GUI, plot=DEFAULT_PLOT, output_folder=DEFAULT_OUTPUT_FO
         path = exp+'/best_model.zip'
     else:
         print("[ERROR]: no model under the specified path", exp)
+    # import pdb;pdb.set_trace()
     if algo == 'a2c':
         model = A2C.load(path)
     if algo == 'ppo':
@@ -102,22 +103,24 @@ def run(exp, gui=DEFAULT_GUI, plot=DEFAULT_PLOT, output_folder=DEFAULT_OUTPUT_FO
                     num_drones=1,
                     output_folder=output_folder
                     )
-    obs = test_env.reset()
-    start = time.time()
-    for i in range(6*int(test_env.SIM_FREQ/test_env.AGGR_PHY_STEPS)): # Up to 6''
-        action, _states = model.predict(obs,
-                                        deterministic=True # OPTIONAL 'deterministic=False'
-                                        )
-        obs, reward, done, info = test_env.step(action)
-        test_env.render()
-        if OBS==ObservationType.KIN:
-            logger.log(drone=0,
-                       timestamp=i/test_env.SIM_FREQ,
-                       state= np.hstack([obs[0:3], np.zeros(4), obs[3:15],  np.resize(action, (4))]),
-                       control=np.zeros(12)
-                       )
-        sync(np.floor(i*test_env.AGGR_PHY_STEPS), start, test_env.TIMESTEP)
-        # if done: obs = test_env.reset() # OPTIONAL EPISODE HALT
+    for _ in range(10):
+        obs = test_env.reset()
+        start = time.time()
+        for i in range(6*int(test_env.SIM_FREQ/test_env.AGGR_PHY_STEPS)): # Up to 6''
+            action, _states = model.predict(obs,
+                                            deterministic=True # OPTIONAL 'deterministic=False'
+                                            )
+            obs, reward, done, info = test_env.step(action)
+            print(reward)
+            test_env.render()
+            if OBS==ObservationType.KIN:
+                logger.log(drone=0,
+                           timestamp=i/test_env.SIM_FREQ,
+                           state= np.hstack([obs[0:3], np.zeros(4), obs[3:15],  np.resize(action, (4))]),
+                           control=np.zeros(12)
+                           )
+            sync(np.floor(i*test_env.AGGR_PHY_STEPS), start, test_env.TIMESTEP)
+            # if done: obs = test_env.reset() # OPTIONAL EPISODE HALT
     test_env.close()
     logger.save_as_csv("sa") # Optional CSV save
     if plot:

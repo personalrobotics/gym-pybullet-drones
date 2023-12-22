@@ -6,6 +6,7 @@ import pkg_resources
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 from gym_pybullet_drones.envs.single_agent_rl.BaseSingleAgentAviary import ActionType, ObservationType, BaseSingleAgentAviary
 
+from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
 
 class FlyThruGateAviary(BaseSingleAgentAviary):
     """Single agent RL problem: fly through a gate."""
@@ -64,8 +65,30 @@ class FlyThruGateAviary(BaseSingleAgentAviary):
                          act=act
                          )
 
-    ################################################################################
-    
+        self.ctrl = DSLPIDControl(drone_model=DroneModel.CF2X)
+        self.goal = np.array([0,-1.8,0.45])
+
+
+    def cal_traj(self,):
+        # generate traj to track
+        self.goal = np.array([0,-1.8,0.45])
+        self.goal[:2] += np.random.normal(0, 0.002, 2)
+        self.goal[2] += np.random.normal(0, 0.001)
+        print(self.goal)
+        self.TRAJ_STEPS = int((self.SIM_FREQ * self.EPISODE_LEN_SEC) / self.AGGR_PHY_STEPS)
+        self.TARGET_POSITION = np.zeros([self.TRAJ_STEPS, 3])
+        self.CTRL_TIMESTEP = self.AGGR_PHY_STEPS*self.TIMESTEP
+        for i in range(self.TRAJ_STEPS):
+            if i < self.TRAJ_STEPS * 0.8:
+                self.TARGET_POSITION[i] = self.goal
+                self.TARGET_POSITION[i] = self.INIT_XYZS[0] + (self.goal - self.INIT_XYZS[0])/(0.8*self.TRAJ_STEPS)*i
+            else:
+                self.TARGET_POSITION[i] = self.goal
+
+        #### Derive the trajectory to obtain target velocity #######
+        self.TARGET_VELOCITY = np.zeros([self.TRAJ_STEPS, 3])
+        self.TARGET_VELOCITY[1:, :] = (self.TARGET_POSITION[1:, :] - self.TARGET_POSITION[0:-1, :]) / self.CTRL_TIMESTEP
+
     def _addObstacles(self):
         """Add obstacles to the environment.
 
@@ -91,7 +114,6 @@ class FlyThruGateAviary(BaseSingleAgentAviary):
                        )
 
     ################################################################################
-    
     def _computeReward(self):
         """Computes the current reward value.
 
@@ -102,8 +124,25 @@ class FlyThruGateAviary(BaseSingleAgentAviary):
 
         """
         state = self._getDroneStateVector(0)
-        norm_ep_time = (self.step_counter/self.SIM_FREQ) / self.EPISODE_LEN_SEC
-        return -10 * np.linalg.norm(np.array([0, -2*norm_ep_time, 0.75])-state[0:3])**2
+        return -1 * np.linalg.norm(self.goal-state[0:3])**2
+    # def _computeReward(self):
+    #     """Computes the current reward value.
+
+    #     Returns
+    #     -------
+    #     float
+    #         The reward.
+
+    #     """
+    #     state = self._getDroneStateVector(0)
+    #     norm_ep_time = (self.step_counter/self.SIM_FREQ) / self.EPISODE_LEN_SEC
+    #     return -10 * np.linalg.norm(np.array([0, -2*norm_ep_time, 0.75])-state[0:3])**2
+
+        # assert len(state.shape) == 1
+        # y_penalty = -10*np.abs(state[0])
+        # big_bonus = 100*(np.linalg.norm(np.array([0, -0.5, 0.2]) - state[0:3]) < 0.05)
+        # small_bonus = 10*(np.linalg.norm(np.array([0, -0.5, 0.2]) - state[0:3]) < 0.2)
+        # return -10 * np.linalg.norm(np.array([0, -0.5, 0.2]) - state[0:3])**2 + small_bonus + big_bonus #+ y_penalty
 
     ################################################################################
     

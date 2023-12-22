@@ -219,7 +219,7 @@ class BaseAviary(gym.Env):
         self._updateAndStoreKinematicInformation()
         #### Start video recording #################################
         self._startVideoRecording()
-    
+        super().__init__()
     ################################################################################
 
     def reset(self):
@@ -232,9 +232,14 @@ class BaseAviary(gym.Env):
             in each subclass for its format.
 
         """
+        self.INIT_XYZS = np.vstack([np.array([x*4*self.L for x in range(self.NUM_DRONES)]), \
+                                np.array([y*4*self.L for y in range(self.NUM_DRONES)]), \
+                                np.ones(self.NUM_DRONES) * (self.COLLISION_H/2-self.COLLISION_Z_OFFSET+.1)]).transpose().reshape(self.NUM_DRONES, 3)
         p.resetSimulation(physicsClientId=self.CLIENT)
         #### Housekeeping ##########################################
         self._housekeeping()
+
+        self.cal_traj()
         #### Update and store the drones kinematic information #####
         self._updateAndStoreKinematicInformation()
         #### Start video recording #################################
@@ -421,6 +426,8 @@ class BaseAviary(gym.Env):
         return self.DRONE_IDS
     
     ################################################################################
+    def cal_traj(self):
+        pass
 
     def _housekeeping(self):
         """Housekeeping function.
@@ -458,12 +465,21 @@ class BaseAviary(gym.Env):
         #### Load ground plane, drone and obstacles models #########
         self.PLANE_ID = p.loadURDF("plane.urdf", physicsClientId=self.CLIENT)
 
+        self.INIT_XYZS[:,:2] += np.random.normal(0, 0.002, (self.NUM_DRONES, 2))
+        self.INIT_XYZS[:,2] += np.max([np.array([0.0]),np.random.normal(0, 0.002, self.NUM_DRONES)])
+        if self.INIT_XYZS[0][2] > 0.5:
+            import pdb;pdb.set_trace()
         self.DRONE_IDS = np.array([p.loadURDF(pkg_resources.resource_filename('gym_pybullet_drones', 'assets/'+self.URDF),
                                               self.INIT_XYZS[i,:],
                                               p.getQuaternionFromEuler(self.INIT_RPYS[i,:]),
                                               flags = p.URDF_USE_INERTIA_FROM_FILE,
                                               physicsClientId=self.CLIENT
                                               ) for i in range(self.NUM_DRONES)])
+        ### Add noise to vel
+        for i in range (self.NUM_DRONES):
+            self.vel[i] += np.random.normal(0, 0.005, 3)
+            self.ang_v[i] += np.random.normal(0, 0.005, 3)
+            p.resetBaseVelocity(self.DRONE_IDS[i], self.vel[i], self.ang_v[i], physicsClientId=self.CLIENT)
         #### Remove default damping #################################
         # for i in range(self.NUM_DRONES):
         #     p.changeDynamics(self.DRONE_IDS[i], -1, linearDamping=0, angularDamping=0)
@@ -474,7 +490,7 @@ class BaseAviary(gym.Env):
                 self._showDroneLocalAxes(i)
             #### Disable collisions between drones' and the ground plane
             #### E.g., to start a drone at [0,0,0] #####################
-            # p.setCollisionFilterPair(bodyUniqueIdA=self.PLANE_ID, bodyUniqueIdB=self.DRONE_IDS[i], linkIndexA=-1, linkIndexB=-1, enableCollision=0, physicsClientId=self.CLIENT)
+            p.setCollisionFilterPair(bodyUniqueIdA=self.PLANE_ID, bodyUniqueIdB=self.DRONE_IDS[i], linkIndexA=-1, linkIndexB=-1, enableCollision=0, physicsClientId=self.CLIENT)
         if self.OBSTACLES:
             self._addObstacles()
     
@@ -534,7 +550,27 @@ class BaseAviary(gym.Env):
         state = np.hstack([self.pos[nth_drone, :], self.quat[nth_drone, :], self.rpy[nth_drone, :],
                            self.vel[nth_drone, :], self.ang_v[nth_drone, :], self.last_clipped_action[nth_drone, :]])
         return state.reshape(20,)
+    def getDroneStateVector(self,
+                             nth_drone
+                             ):
+        """Returns the state vector of the n-th drone.
 
+        Parameters
+        ----------
+        nth_drone : int
+            The ordinal number/position of the desired drone in list self.DRONE_IDS.
+
+        Returns
+        -------
+        ndarray
+            (20,)-shaped array of floats containing the state vector of the n-th drone.
+            Check the only line in this method and `_updateAndStoreKinematicInformation()`
+            to understand its format.
+
+        """
+        state = np.hstack([self.pos[nth_drone, :], self.quat[nth_drone, :], self.rpy[nth_drone, :],
+                           self.vel[nth_drone, :], self.ang_v[nth_drone, :], self.last_clipped_action[nth_drone, :]])
+        return state.reshape(20,)
     ################################################################################
 
     def _getDroneImages(self,
